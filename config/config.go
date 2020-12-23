@@ -99,6 +99,11 @@ func (config *Config) setDefaults() {
 	config.SetDefault("MW_ACCESS_LOGGER_MAXBACKUPS", 3)
 	config.SetDefault("MW_ACCESS_LOGGER_LOCALTIME", false)
 	config.SetDefault("MW_ACCESS_LOGGER_COMPRESS", false)
+
+	// Set default Fiber Favicon middleware configuration
+	config.SetDefault("MW_FIBER_FAVICON_ENABLED", false)
+	config.SetDefault("MW_FIBER_FAVICON_FILE", "")
+	config.SetDefault("MW_FIBER_FAVICON_CACHECONTROL", "public, max-age=31536000")
 }
 
 func (config *Config) GetFiberConfig() *fiber.Config {

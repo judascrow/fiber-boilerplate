@@ -1,16 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/favicon"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/judascrow/fiber-boilerplate/app/middlewares"
+	"github.com/judascrow/fiber-boilerplate/app/models"
+	"github.com/judascrow/fiber-boilerplate/app/routes"
 	configuration "github.com/judascrow/fiber-boilerplate/config"
+	"github.com/judascrow/fiber-boilerplate/database"
 )
 
 type App struct {
 	*fiber.App
+
+	DB *database.Database
 }
 
 func main() {
@@ -23,17 +32,39 @@ func main() {
 	app.registerMiddlewares(config)
 
 	// Initialize database
-	var err error
+	db, err := database.New(&database.DatabaseConfig{
+		Driver:   config.GetString("DB_DRIVER"),
+		Host:     config.GetString("DB_HOST"),
+		Username: config.GetString("DB_USERNAME"),
+		Password: config.GetString("DB_PASSWORD"),
+		Port:     config.GetInt("DB_PORT"),
+		Database: config.GetString("DB_DATABASE"),
+	})
+
+	// Auto-migrate database models
+	if err != nil {
+		fmt.Println("failed to connect to database:", err.Error())
+	} else {
+		if db == nil {
+			fmt.Println("failed to connect to database: db variable is nil")
+		} else {
+			app.DB = db
+			err := app.DB.AutoMigrate(&models.Role{})
+			if err != nil {
+				fmt.Println("failed to automigrate role model:", err.Error())
+				return
+			}
+			err = app.DB.AutoMigrate(&models.User{})
+			if err != nil {
+				fmt.Println("failed to automigrate user model:", err.Error())
+				return
+			}
+		}
+	}
 
 	api := app.Group("/api")
 	apiv1 := api.Group("/v1")
-	apiv1.Get("/healthcheck", func(c *fiber.Ctx) error {
-		return c.JSON(fiber.Map{
-			"success": true,
-			"message": "API Is Online",
-		})
-
-	})
+	routes.RegisterAPI(apiv1, app.DB)
 
 	// Custom 404 Handler
 	app.Use(func(c *fiber.Ctx) error {
@@ -62,6 +93,15 @@ func main() {
 }
 
 func (app *App) registerMiddlewares(config *configuration.Config) {
+
+	// Middleware - Favicon
+	if config.GetBool("MW_FIBER_FAVICON_ENABLED") {
+		app.Use(favicon.New(favicon.Config{
+			File:         config.GetString("MW_FIBER_FAVICON_FILE"),
+			CacheControl: config.GetString("MW_FIBER_FAVICON_CACHECONTROL"),
+		}))
+	}
+
 	// Middleware - Custom Access Logger based on zap
 	if config.GetBool("MW_ACCESS_LOGGER_ENABLED") {
 		app.Use(middlewares.AccessLogger(&middlewares.AccessLoggerConfig{
@@ -74,7 +114,25 @@ func (app *App) registerMiddlewares(config *configuration.Config) {
 			LocalTime:   config.GetBool("MW_ACCESS_LOGGER_LOCALTIME"),
 			Compress:    config.GetBool("MW_ACCESS_LOGGER_COMPRESS"),
 		}))
+	} else {
+		app.Use(logger.New())
 	}
+
+	// Middleware - Force HTTPS
+	if config.GetBool("MW_FORCE_HTTPS_ENABLED") {
+		app.Use(middlewares.ForceHTTPS())
+	}
+
+	// Middleware - Force trailing slash
+	if config.GetBool("MW_FORCE_TRAILING_SLASH_ENABLED") {
+		app.Use(middlewares.ForceTrailingSlash())
+	}
+
+	// Middleware - Recover
+	if config.GetBool("MW_FIBER_RECOVER_ENABLED") {
+		app.Use(recover.New())
+	}
+
 }
 
 // Stop the Fiber application
