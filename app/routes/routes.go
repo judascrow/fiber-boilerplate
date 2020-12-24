@@ -23,8 +23,8 @@ func registerRoles(api fiber.Router, db *database.Database) {
 
 	roles.Get("/", controllers.GetAllRoles(db))
 	roles.Get("/:id", controllers.GetRole(db))
-	// roles.Post("/", Controller.AddRole(db))
-	// roles.Put("/:id", Controller.EditRole(db))
+	roles.Post("/", controllers.AddRole(db))
+	roles.Put("/:id", controllers.EditRole(db))
 	// roles.Delete("/:id", Controller.DeleteRole(db))
 }
 
